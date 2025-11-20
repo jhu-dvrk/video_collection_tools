@@ -248,8 +248,13 @@ void video_pipeline::start_recording()
     }
 
     g_object_set(sink, "location", filename.c_str(), nullptr);
-    // Tune encoder for lower latency/CPU if needed, though defaults are usually okay
-    g_object_set(enc, "tune", 0x00000004, "speed-preset", 1, nullptr); // zerolatency, ultrafast
+    // Tune encoder for higher quality
+    g_object_set(enc, 
+                 "bitrate", 10000,           // 10 Mbps bitrate (default is ~2 Mbps)
+                 "speed-preset", 2,          // medium preset (balance quality/speed, default ultrafast=1)
+                 "tune", 0x00000000,         // no special tuning (remove zerolatency)
+                 "key-int-max", 60,          // keyframe every 60 frames (~1 sec at 60fps)
+                 nullptr);
 
     gst_bin_add_many(GST_BIN(m_recording_bin), queue, convert, enc, mux, sink, nullptr);
     gst_element_link_many(queue, convert, enc, mux, sink, nullptr);

@@ -26,6 +26,7 @@ public:
         , m_frame_count(0)
         , m_start_time_ms(0)
         , m_fps(30.0)
+        , m_total_frames(0)
     {
         // Parse JSON metadata
         std::ifstream file(json_file);
@@ -110,6 +111,16 @@ public:
             return false;
         }
         
+        // Wait for pipeline to be ready and query duration
+        gst_element_get_state(m_pipeline, nullptr, nullptr, GST_CLOCK_TIME_NONE);
+        
+        gint64 duration_ns = 0;
+        if (gst_element_query_duration(m_pipeline, GST_FORMAT_TIME, &duration_ns)) {
+            double duration_sec = duration_ns / 1e9;
+            m_total_frames = static_cast<uint64_t>(duration_sec * m_fps);
+            std::cout << "Estimated total frames: " << m_total_frames << std::endl;
+        }
+        
         // Wait for EOS or error
         GstBus* bus = gst_element_get_bus(m_pipeline);
         GstMessage* msg = gst_bus_timed_pop_filtered(
@@ -139,6 +150,7 @@ public:
         // Write index file
         write_index();
         
+        std::cout << std::endl; // Move to next line after progress updates
         std::cout << "Extracted " << m_frame_count << " frames" << std::endl;
         return true;
     }
@@ -255,8 +267,14 @@ private:
         
         m_frame_count++;
         
-        if (m_frame_count % 100 == 0) {
-            std::cout << "Extracted " << m_frame_count << " frames..." << std::endl;
+ 
+        if (m_total_frames > 0) {
+            double progress = (m_frame_count * 100.0) / m_total_frames;
+            std::cout << "\rProgress: " << std::fixed << std::setprecision(1) 
+                        << progress << "% (" << m_frame_count << "/" << m_total_frames << ")" 
+                        << std::flush;
+        } else {
+            std::cout << "\rExtracted " << m_frame_count << " frames..." << std::flush;
         }
         
         gst_sample_unref(sample);
@@ -313,6 +331,7 @@ private:
     uint64_t m_start_time_ms;
     struct timespec m_start_timespec;
     double m_fps;
+    uint64_t m_total_frames;
 };
 
 int main(int argc, char* argv[]) {
