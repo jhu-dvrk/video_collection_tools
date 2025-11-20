@@ -38,14 +38,23 @@ set(SOURCES
     src/gtk_stream_buf.cpp
 )
 
-# Create executable
+# Create video_recorder executable
 add_executable(video_recorder ${SOURCES})
 
-# Link libraries
+# Link libraries for video_recorder
 target_link_libraries(video_recorder
     ${GSTREAMER_LIBRARIES}
     ${GSTREAMER_VIDEO_LIBRARIES}
     ${GTK3_LIBRARIES}
+    ${JSONCPP_LIBRARIES}
+)
+
+# Create frame_extractor executable
+add_executable(frame_extractor src/frame_extractor.cpp)
+
+# Link libraries for frame_extractor
+target_link_libraries(frame_extractor
+    ${GSTREAMER_LIBRARIES}
     ${JSONCPP_LIBRARIES}
 )
 

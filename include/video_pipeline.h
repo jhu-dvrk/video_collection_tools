@@ -4,6 +4,7 @@
 #include <string>
 #include <memory>
 #include <atomic>
+#include <ctime>
 #include "video_preview.h"
 
 struct RecordingMetadata {
@@ -16,6 +17,8 @@ struct RecordingMetadata {
     uint64_t stop_dts;
     std::string start_abs_time;
     std::string stop_abs_time;
+    struct timespec start_timespec;
+    struct timespec stop_timespec;
     uint64_t recorded_frames;
     double average_fps;
 };

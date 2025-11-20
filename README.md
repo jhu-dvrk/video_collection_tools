@@ -1,8 +1,10 @@
 # Video Recorder
 
-A GStreamer-based multi-stream video player and recorder with a GTK3 GUI, written in C++ using CMake.
+A GStreamer-based multi-stream video player, recorder, and frame extraction toolkit with a GTK3 GUI, written in C++ using CMake.
 
 ## Features
+
+### Video Recorder
 
 - **Multi-Stream Support**: Configurable via `config.json` to handle multiple video sources simultaneously.
 - **Central Control Panel**: A dedicated "Controls" window to manage all video streams with integrated log viewer.
@@ -12,7 +14,7 @@ A GStreamer-based multi-stream video player and recorder with a GTK3 GUI, writte
   - Records to **MP4** format (H.264 video).
 - **Metadata Generation**:
   - Generates a sidecar `.json` file for each video recording.
-  - Contains start/stop timestamps (absolute wall-clock time), frame counts, PTS/DTS, and average FPS.
+  - Contains start/stop timestamps with nanosecond precision (both human-readable and `timespec` format), frame counts, PTS/DTS, and average FPS.
 - **Dynamic Data Directory**:
   - Select output directory via the UI.
   - Automatically creates directories if they don't exist.
@@ -22,6 +24,14 @@ A GStreamer-based multi-stream video player and recorder with a GTK3 GUI, writte
   - Right-click context menu to toggle aspect ratio constraints.
   - Optional secondary `glimagesink` output per source (configurable via `tee_gl_view` flag).
 - **Live Log Monitoring**: Scrollable text view displaying application messages in real-time.
+
+### Frame Extractor
+
+- **Precise Frame Extraction**: Extracts individual frames from recorded MP4 videos.
+- **Nanosecond-Precision Timestamps**: Calculates frame timestamps using the precise start time from recording metadata.
+- **Automatic Metadata Generation**: Creates an `index.json` file containing frame-level metadata.
+- **PNG Output**: Saves each frame as a numbered PNG file.
+- **Simple Interface**: Single parameter invocation using the metadata JSON file.
 
 ## Dependencies
 
@@ -96,15 +106,37 @@ cmake ..
 make
 ```
 
+This builds two executables:
+- `video_recorder`: The main recording application
+- `frame_extractor`: Frame extraction tool
+
 ## Running
+
+### Video Recorder
 
 Ensure `config.json` is in the current directory (or the build directory if running from there).
 
 ```bash
-./video_recorder
+./video_recorder -c config.json
 ```
 
+### Frame Extractor
+
+Extract frames from a recorded video by providing the metadata JSON file:
+
+```bash
+./frame_extractor /path/to/Camera_1_2025-11-19_14-30-00.mp4.json
+```
+
+The extractor will:
+1. Read the metadata JSON file to find the corresponding MP4 file
+2. Create an output directory named `{video_basename}_frames/`
+3. Extract all frames as `frame_000001.png`, `frame_000002.png`, etc.
+4. Generate an `index.json` file with per-frame metadata including precise timestamps
+
 ## Output
+
+### Video Recorder Output
 
 Recorded files are saved to the configured data directory with the naming convention:
 `{Source_Name}_{YYYY-MM-DD_HH-MM-SS}.mp4`
@@ -118,11 +150,49 @@ Example Metadata:
     "filename": "Camera_1_2025-11-19_14-30-00.mp4",
     "start_abs_time": "2025-11-19 14:30:00.123",
     "stop_abs_time": "2025-11-19 14:30:10.456",
+    "start_timespec_sec": 1732024200,
+    "start_timespec_nsec": 123456789,
+    "stop_timespec_sec": 1732024210,
+    "stop_timespec_nsec": 456789012,
     "recorded_frames": 300,
     "average_fps": 29.97,
     "start_frame": 100,
     "stop_frame": 400,
     ...
+}
+```
+
+### Frame Extractor Output
+
+The frame extractor creates a directory named `{video_basename}_frames/` containing:
+
+- **PNG files**: `frame_000001.png`, `frame_000002.png`, etc. (one per frame)
+- **index.json**: Metadata file with frame information
+
+Example `index.json`:
+```json
+{
+    "source_video": "Camera_1_2025-11-19_14-30-00.mp4",
+    "source_metadata": "Camera_1_2025-11-19_14-30-00.mp4.json",
+    "total_frames": 300,
+    "fps": 29.97,
+    "frames": [
+        {
+            "frame_number": 1,
+            "filename": "frame_000001.png",
+            "timestamp": "2025-11-19 14:30:00.123",
+            "timespec_sec": 1732024200,
+            "timespec_nsec": 123456789
+        },
+        {
+            "frame_number": 2,
+            "filename": "frame_000002.png",
+            "timestamp": "2025-11-19 14:30:00.157",
+            "timespec_sec": 1732024200,
+            "timespec_nsec": 156790122
+        },
+        ...
+    ]
 }
 ```
 
@@ -139,6 +209,7 @@ video-recorder/
 │   ├── video_pipeline.h    # GStreamer pipeline wrapper
 │   └── video_preview.h     # GTK video window
 └── src/                    # Source files
+    ├── frame_extractor.cpp # Frame extraction tool
     ├── gtk_stream_buf.cpp
     ├── main.cpp            # Entry point
     ├── video_controller.cpp

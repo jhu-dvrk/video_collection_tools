@@ -184,13 +184,19 @@ void video_pipeline::set_output_directory(const std::string& dir)
     m_output_directory = dir;
 }
 
-static std::string get_current_time_string() {
-    auto now = std::chrono::system_clock::now();
-    auto in_time_t = std::chrono::system_clock::to_time_t(now);
-    auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()) % 1000;
+static std::string get_current_time_string(struct timespec* ts = nullptr) {
+    struct timespec now_ts;
+    clock_gettime(CLOCK_REALTIME, &now_ts);
+    
+    if (ts) {
+        *ts = now_ts;
+    }
+    
+    auto in_time_t = now_ts.tv_sec;
+    auto ms = now_ts.tv_nsec / 1000000;
     std::stringstream ss;
     ss << std::put_time(std::localtime(&in_time_t), "%Y-%m-%d %H:%M:%S");
-    ss << '.' << std::setfill('0') << std::setw(3) << ms.count();
+    ss << '.' << std::setfill('0') << std::setw(3) << ms;
     return ss.str();
 }
 
@@ -206,7 +212,7 @@ void video_pipeline::start_recording()
     // Initialize metadata
     m_metadata = RecordingMetadata();
     m_metadata.start_frame = m_frame_count;
-    m_metadata.start_abs_time = get_current_time_string();
+    m_metadata.start_abs_time = get_current_time_string(&m_metadata.start_timespec);
     m_metadata.recorded_frames = 0;
     m_metadata.average_fps = 0.0;
     m_first_buffer_recorded = false;
@@ -278,7 +284,7 @@ void video_pipeline::stop_recording()
     std::cout << "Stopping recording for " << m_name << std::endl;
     
     m_metadata.stop_frame = m_frame_count;
-    m_metadata.stop_abs_time = get_current_time_string();
+    m_metadata.stop_abs_time = get_current_time_string(&m_metadata.stop_timespec);
 
     // Block the tee pad to safely unlink
     gst_pad_add_probe(m_tee_recording_pad, GST_PAD_PROBE_TYPE_BLOCK_DOWNSTREAM, unlink_cb, this, nullptr);
@@ -339,6 +345,10 @@ GstPadProbeReturn video_pipeline::unlink_cb(GstPad* pad, GstPadProbeInfo* info, 
     root["stop_dts"] = (Json::UInt64)self->m_metadata.stop_dts;
     root["start_abs_time"] = self->m_metadata.start_abs_time;
     root["stop_abs_time"] = self->m_metadata.stop_abs_time;
+    root["start_timespec_sec"] = (Json::Int64)self->m_metadata.start_timespec.tv_sec;
+    root["start_timespec_nsec"] = (Json::Int64)self->m_metadata.start_timespec.tv_nsec;
+    root["stop_timespec_sec"] = (Json::Int64)self->m_metadata.stop_timespec.tv_sec;
+    root["stop_timespec_nsec"] = (Json::Int64)self->m_metadata.stop_timespec.tv_nsec;
     root["recorded_frames"] = (Json::UInt64)self->m_metadata.recorded_frames;
     root["average_fps"] = self->m_metadata.average_fps;
 
