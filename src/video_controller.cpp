@@ -55,7 +55,7 @@ void video_controller::create_ui()
     m_main_record_button = gtk_toggle_button_new_with_label("Record");
     g_signal_connect(m_main_record_button, "toggled", G_CALLBACK(on_main_record_toggled_cb), this);
     gtk_box_pack_start(GTK_BOX(control_box), m_main_record_button, FALSE, FALSE, 0);
-    
+
     gtk_box_pack_start(GTK_BOX(control_box), gtk_separator_new(GTK_ORIENTATION_HORIZONTAL), FALSE, FALSE, 5);
 
     const Json::Value& sources = m_config["sources"];
@@ -85,6 +85,11 @@ void video_controller::create_ui()
             gtk_box_pack_start(GTK_BOX(row), label, TRUE, TRUE, 0);
             gtk_box_pack_start(GTK_BOX(row), check, FALSE, FALSE, 0);
             
+            // Set default record state for this source
+            if (source.isMember("record") && source["record"].asBool()) {
+                gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(check), TRUE);
+            }
+
             g_signal_connect(check, "toggled", G_CALLBACK(on_source_check_toggled_cb), this);
             m_checkboxes.push_back(check);
             
@@ -101,6 +106,9 @@ void video_controller::create_ui()
     GtkWidget* quit_btn = gtk_button_new_with_label("Quit");
     g_signal_connect(quit_btn, "clicked", G_CALLBACK(on_quit_clicked_cb), this);
     gtk_box_pack_end(GTK_BOX(control_box), quit_btn, FALSE, FALSE, 0);
+
+    // Ensure initial recording state is correct based on all buttons
+    update_recording_state();
 
     gtk_widget_show_all(m_control_window);
 }

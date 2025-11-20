@@ -1,12 +1,15 @@
 {
+  "data_directory": "data",
   "sources": [
     {
       "name": "Test Source 1",
-      "stream": "videotestsrc"
+      "stream": "videotestsrc",
+      "record": true
     },
     {
       "name": "Bouncing Ball",
-      "stream": "videotestsrc pattern=ball"
+      "stream": "videotestsrc pattern=ball",
+      "record": false
     }
   ]
 }
