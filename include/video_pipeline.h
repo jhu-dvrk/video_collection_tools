@@ -28,13 +28,15 @@ public:
     video_pipeline(const std::string& name, const std::string& stream_desc, bool tee_gl_view = false);
     ~video_pipeline();
 
-    bool build();
-    void start();
-    void stop();
-    void set_recording(bool enable);
+    bool build(void);
+    void start(void);
+    void stop(void);
     void set_output_directory(const std::string& dir);
-    
-    GtkWidget* get_window() const;
+    void start_recording(void);
+    void stop_recording(void);
+
+    GtkWidget* get_window(void) const;
+    std::string get_name(void) const { return m_name; } // Getter for pipeline name
 
 private:
     std::string m_name;
@@ -50,8 +52,6 @@ private:
     RecordingMetadata m_metadata;
     bool m_first_buffer_recorded;
 
-    void start_recording();
-    void stop_recording();
     static GstPadProbeReturn unlink_cb(GstPad* pad, GstPadProbeInfo* info, gpointer user_data);
     static GstPadProbeReturn global_probe_cb(GstPad* pad, GstPadProbeInfo* info, gpointer user_data);
     static GstPadProbeReturn recording_probe_cb(GstPad* pad, GstPadProbeInfo* info, gpointer user_data);

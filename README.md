@@ -1,4 +1,4 @@
-# Video Recorder
+# JHU Data Collection
 
 A GStreamer-based multi-stream video player, recorder, and frame extraction toolkit with a GTK3 GUI, written in C++ using CMake.
 
@@ -89,26 +89,33 @@ Example `config.json`:
   - **`record`**: Boolean indicating whether this source should be selected for recording by default.
   - **`tee_gl_view`**: Boolean to enable an additional `glimagesink` window for this source (useful for debugging or multi-monitor setups).
 
-## Building
 
-1. Create and enter the build directory:
-```bash
-mkdir -p build && cd build
-```
+## Building (ROS2 / Colcon)
 
-2. Configure the project with CMake:
-```bash
-cmake ..
-```
+1. From the root of your ROS2 workspace (e.g., `~/ros2_ws`), clone this repository into the `src` folder:
+  ```bash
+  cd ~/ros2_ws/src
+  git clone <repo-url>
+  ```
 
-3. Build the project:
-```bash
-make
-```
+2. Install dependencies (see above for system packages).
 
-This builds two executables:
-- `video_recorder`: The main recording application
-- `frame_extractor`: Frame extraction tool
+3. Build the workspace using colcon:
+  ```bash
+  cd ~/ros2_ws
+  colcon build --packages-select jhu_data_collection
+  ```
+
+4. Source the workspace:
+  ```bash
+  source install/setup.bash
+  ```
+
+This builds the following executables:
+- `video_recorder`: The main recording application (without ROS topics)
+- `video_recorder_node`: Same as above but with ROS topics to start/stop collection
+- `frame_extractor`: Frame extraction tool (ROS independent)
+
 
 ## Running
 
@@ -118,6 +125,12 @@ Ensure `config.json` is in the current directory (or the build directory if runn
 
 ```bash
 ./video_recorder -c config.json
+```
+
+### Video Recorder Node
+
+```bash
+ros2 run jhu_data_collection video_recorder_node -c <path_to_config_file>
 ```
 
 ### Frame Extractor
@@ -133,6 +146,26 @@ The extractor will:
 2. Create an output directory named `{video_basename}_frames/`
 3. Extract all frames as `frame_000001.png`, `frame_000002.png`, etc.
 4. Generate an `index.json` file with per-frame metadata including precise timestamps
+
+### ROS2 Python Control Scripts
+
+The following ROS2 Python scripts are provided for controlling the video recorder node:
+
+- `start_recording.py`: Publishes a message to `/video_recorder/control` to start recording.
+- `stop_recording.py`: Publishes a message to `/video_recorder/control` to stop recording.
+- `set_data_directory.py <directory_path>`: Publishes the new data directory to `/video_recorder/data_directory`.
+- `set_recording.py <pipeline_name>`: Publishes a message to `set_record` to select a pipeline for recording.
+- `unset_recording.py <pipeline_name>`: Publishes a message to `unset_record` to deselect a pipeline for recording.
+
+Example usage:
+
+```bash
+ros2 run jhu_data_collection start_recording.py
+ros2 run jhu_data_collection stop_recording.py
+ros2 run jhu_data_collection set_data_directory.py /path/to/data
+ros2 run jhu_data_collection set_recording.py Camera_1
+ros2 run jhu_data_collection unset_recording.py Camera_1
+```
 
 ## Output
 

@@ -49,6 +49,5 @@ int main(int argc, char* argv[])
 
     // Run GTK main loop
     gtk_main();
-
     return 0;
 }

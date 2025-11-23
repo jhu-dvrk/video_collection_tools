@@ -1,3 +1,7 @@
+// ROS2 integration: unset recording by pipeline name
+#include <string>
+#include <cstddef>
+#include <iostream>
 #include "video_controller.h"
 #include "gtk_stream_buf.h"
 #include <iostream>
@@ -157,7 +161,11 @@ void video_controller::update_recording_state()
     for (size_t i = 0; i < m_pipelines.size(); ++i) {
         if (i < m_checkboxes.size()) {
             gboolean selected = gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(m_checkboxes[i]));
-            m_pipelines[i]->set_recording(recording_active && selected);
+            if (recording_active && selected) {
+                m_pipelines[i]->start_recording();
+            } else {
+                m_pipelines[i]->stop_recording();
+            }
         }
     }
 }
@@ -257,6 +265,49 @@ gboolean video_controller::restart_recording_cb(gpointer data)
         gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(self->m_main_record_button), TRUE);
     }
     return G_SOURCE_REMOVE;
+}
+
+
+// ROS2 integration: set recording by pipeline name
+void video_controller::set_recording_by_name(const std::string& name, bool enable)
+{
+    if (name.empty()) {
+        // If name is empty, apply to all pipelines
+        for (size_t i = 0; i < m_pipelines.size(); ++i) {
+            if (m_pipelines[i]) {
+                // m_pipelines[i]->set_recording(enable); // removed
+                if (i < m_checkboxes.size()) {
+                    gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(m_checkboxes[i]), enable ? TRUE : FALSE);
+                }
+            }
+        }
+        std::cout << (enable ? "Recording enabled for all pipelines" : "Recording disabled for all pipelines") << std::endl;
+    } else {
+        for (size_t i = 0; i < m_pipelines.size(); ++i) {
+            if (m_pipelines[i] && m_pipelines[i]->get_name() == name) {
+                // m_pipelines[i]->set_recording(enable); // removed
+                std::cout << (enable ? "Recording enabled for pipeline: " : "Recording disabled for pipeline: ") << name << std::endl;
+                // Update GUI checkbox if available
+                if (i < m_checkboxes.size()) {
+                    gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(m_checkboxes[i]), enable ? TRUE : FALSE);
+                }
+            }
+        }
+    }
+}
+
+// ROS2 integration: set data directory
+void video_controller::set_data_directory(const std::string& dir)
+{
+    m_data_dir = dir;
+    std::cout << "Set data directory: " << m_data_dir << std::endl;
+    std::string label_text = "Data Directory: " + m_data_dir;
+    if (m_dir_label) {
+        gtk_label_set_text(GTK_LABEL(m_dir_label), label_text.c_str());
+    }
+    for (auto& pipe : m_pipelines) {
+        pipe->set_output_directory(m_data_dir);
+    }
 }
 
 void video_controller::on_window_destroy_cb(GtkWidget* widget, gpointer data)

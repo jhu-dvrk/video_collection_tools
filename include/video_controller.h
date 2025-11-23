@@ -16,6 +16,13 @@ public:
     void create_ui();
     bool has_open_windows() const;
 
+    // ROS2 integration: set recording by pipeline name
+    void set_recording_by_name(const std::string& name, bool enable);
+    // ROS2 integration: unset recording by pipeline name
+    void unset_recording_by_name(const std::string& name);
+    // ROS2 integration: set data directory
+    void set_data_directory(const std::string& dir);
+
 private:
     Json::Value m_config;
     GtkWidget* m_control_window;

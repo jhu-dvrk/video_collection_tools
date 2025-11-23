@@ -1,4 +1,5 @@
 #include "video_pipeline.h"
+
 #include <iostream>
 #include <stdexcept>
 #include <chrono>
@@ -62,7 +63,7 @@ video_pipeline::~video_pipeline()
     }
 }
 
-bool video_pipeline::build()
+bool video_pipeline::build(void)
 {
     m_pipeline = gst_pipeline_new(nullptr);
     if (!m_pipeline) {
@@ -153,29 +154,20 @@ bool video_pipeline::build()
     return true;
 }
 
-void video_pipeline::start()
+void video_pipeline::start(void)
 {
     if (m_pipeline) {
         gst_element_set_state(m_pipeline, GST_STATE_PLAYING);
     }
 }
 
-void video_pipeline::stop()
+void video_pipeline::stop(void)
 {
     if (m_recording_bin) {
         stop_recording();
     }
     if (m_pipeline) {
         gst_element_set_state(m_pipeline, GST_STATE_NULL);
-    }
-}
-
-void video_pipeline::set_recording(bool enable)
-{
-    if (enable) {
-        start_recording();
-    } else {
-        stop_recording();
     }
 }
 
@@ -280,7 +272,7 @@ void video_pipeline::start_recording()
     gst_object_unref(bin_sink_pad);
 }
 
-void video_pipeline::stop_recording()
+void video_pipeline::stop_recording(void)
 {
     if (!m_recording_bin || !m_tee_recording_pad) {
         return;
@@ -391,7 +383,7 @@ GstPadProbeReturn video_pipeline::unlink_cb(GstPad* pad, GstPadProbeInfo* info, 
     return GST_PAD_PROBE_OK;
 }
 
-GtkWidget* video_pipeline::get_window() const
+GtkWidget* video_pipeline::get_window(void) const
 {
     return m_preview->get_window();
 }
