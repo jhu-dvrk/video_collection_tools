@@ -2,39 +2,88 @@
 // Copyright 2025 Johns Hopkins University
 
 #include "video_preview.h"
+#include <gdk/gdk.h>
 #include <gdk/gdkx.h>
 #include <iostream>
 #include <stdexcept>
 
 video_preview::video_preview(const std::string &name)
-    : m_name(name), m_sink(nullptr) {
+    : m_name(name), m_sink(nullptr), m_sink_embedded(false) {
   m_window = gtk_window_new(GTK_WINDOW_TOPLEVEL);
   gtk_window_set_title(GTK_WINDOW(m_window), name.c_str());
   gtk_window_set_default_size(GTK_WINDOW(m_window), 400, 300);
 
-  m_video_area = gtk_drawing_area_new();
-  gtk_widget_set_hexpand(m_video_area, TRUE);
-  gtk_widget_set_vexpand(m_video_area, TRUE);
-
-  gtk_container_add(GTK_CONTAINER(m_window), m_video_area);
-
-  gtk_widget_add_events(m_video_area,
-                        GDK_BUTTON_PRESS_MASK | GDK_STRUCTURE_MASK);
-
-  g_signal_connect(m_video_area, "button-press-event",
-                   G_CALLBACK(on_button_press), this);
-  g_signal_connect(m_video_area, "size-allocate", G_CALLBACK(on_size_allocate),
-                   this);
-  g_signal_connect(m_video_area, "realize", G_CALLBACK(on_realize), this);
-
-  m_sink = gst_element_factory_make("glimagesink", "sink");
-  if (!m_sink) {
-    throw std::runtime_error("Failed to create glimagesink");
+  // Detect display backend and prefer a compatible sink. Prefer gtksink when
+  // running on Wayland (detected via environment), otherwise use glimagesink
+  // and set X11 window handle. If gtksink is unavailable, fall back to
+  // glimagesink.
+  bool prefer_gtksink = false;
+  const char* wayland_env = std::getenv("WAYLAND_DISPLAY");
+  const char* xdg_session = std::getenv("XDG_SESSION_TYPE");
+  if ((wayland_env && wayland_env[0] != '\0') ||
+      (xdg_session && std::string(xdg_session) == "wayland")) {
+    prefer_gtksink = true;
+    std::cout << "video_preview: Wayland detected via environment; will try gtksink." << std::endl;
+  } else {
+    std::cout << "video_preview: Wayland not detected; will use glimagesink." << std::endl;
   }
 
-  // Configure sink for free resizing initially (or default)
-  g_object_set(m_sink, "force-aspect-ratio", FALSE, "handle-events", FALSE,
-               nullptr);
+  if (prefer_gtksink) {
+    // Try gtksink first
+    m_sink = gst_element_factory_make("gtksink", "sink");
+    if (m_sink) {
+      GtkWidget* sink_widget = nullptr;
+      g_object_get(G_OBJECT(m_sink), "widget", &sink_widget, NULL);
+      if (sink_widget) {
+        std::cout << "video_preview: Using gtksink (embedded widget) for rendering." << std::endl;
+        m_video_area = sink_widget;
+        gtk_container_add(GTK_CONTAINER(m_window), m_video_area);
+        gtk_widget_add_events(m_video_area,
+                              GDK_BUTTON_PRESS_MASK | GDK_STRUCTURE_MASK);
+        g_signal_connect(m_video_area, "button-press-event",
+                         G_CALLBACK(on_button_press), this);
+        g_signal_connect(m_video_area, "size-allocate", G_CALLBACK(on_size_allocate),
+                         this);
+        g_signal_connect(m_video_area, "realize", G_CALLBACK(on_realize), this);
+        m_sink_embedded = true;
+      } else {
+        // gtksink didn't give a widget; fall back
+        std::cout << "video_preview: gtksink created but did not provide widget; falling back to glimagesink." << std::endl;
+        gst_object_unref(m_sink);
+        m_sink = nullptr;
+      }
+    } else {
+      std::cout << "video_preview: gtksink not available; falling back to glimagesink." << std::endl;
+    }
+  }
+
+  if (!m_sink) {
+    // Fallback to glimagesink and use a drawing area
+    m_video_area = gtk_drawing_area_new();
+    gtk_widget_set_hexpand(m_video_area, TRUE);
+    gtk_widget_set_vexpand(m_video_area, TRUE);
+
+    gtk_container_add(GTK_CONTAINER(m_window), m_video_area);
+
+    gtk_widget_add_events(m_video_area,
+                          GDK_BUTTON_PRESS_MASK | GDK_STRUCTURE_MASK);
+
+    g_signal_connect(m_video_area, "button-press-event",
+                     G_CALLBACK(on_button_press), this);
+    g_signal_connect(m_video_area, "size-allocate", G_CALLBACK(on_size_allocate),
+                     this);
+    g_signal_connect(m_video_area, "realize", G_CALLBACK(on_realize), this);
+
+    m_sink = gst_element_factory_make("glimagesink", "sink");
+    if (!m_sink) {
+      throw std::runtime_error("Failed to create glimagesink");
+    }
+
+    // Configure sink for free resizing initially (or default)
+    g_object_set(m_sink, "force-aspect-ratio", FALSE, "handle-events", FALSE,
+                 nullptr);
+    m_sink_embedded = false;
+  }
 }
 
 video_preview::~video_preview() {
@@ -53,12 +102,20 @@ void video_preview::on_realize(GtkWidget *widget, gpointer data) {
 }
 
 void video_preview::handle_realize() {
-  // Set video overlay window handle using X11
-  GdkWindow *gdk_window = gtk_widget_get_window(m_video_area);
-  if (gdk_window && m_sink) {
-    guintptr window_handle = GDK_WINDOW_XID(gdk_window);
-    GstVideoOverlay *overlay = GST_VIDEO_OVERLAY(m_sink);
-    gst_video_overlay_set_window_handle(overlay, window_handle);
+  // If the sink is not embedded (e.g., glimagesink on X11), set the X11
+  // window handle so the overlay knows where to render. For embedded sinks
+  // (gtksink on Wayland) the sink manages its widget internally.
+  if (!m_sink_embedded && m_sink) {
+    // Only attempt to get XID on systems using X11 (DISPLAY set).
+    const char* display_env = std::getenv("DISPLAY");
+    if (display_env && display_env[0] != '\0') {
+      GdkWindow *gdk_window = gtk_widget_get_window(m_video_area);
+      if (gdk_window) {
+        guintptr window_handle = GDK_WINDOW_XID(gdk_window);
+        GstVideoOverlay *overlay = GST_VIDEO_OVERLAY(m_sink);
+        gst_video_overlay_set_window_handle(overlay, window_handle);
+      }
+    }
   }
 }
 
@@ -168,7 +225,9 @@ void video_preview::free_aspect_ratio() {
 
     handle_size_allocate(&allocation);
 
-    GstVideoOverlay *overlay = GST_VIDEO_OVERLAY(m_sink);
-    gst_video_overlay_expose(overlay);
+    if (!m_sink_embedded) {
+      GstVideoOverlay *overlay = GST_VIDEO_OVERLAY(m_sink);
+      gst_video_overlay_expose(overlay);
+    }
   }
 }

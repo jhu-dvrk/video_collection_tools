@@ -21,6 +21,7 @@ private:
   GtkWidget *m_window;
   GtkWidget *m_video_area;
   GstElement *m_sink;
+  bool m_sink_embedded;
 
   static void on_realize(GtkWidget *widget, gpointer data);
   static void on_size_allocate(GtkWidget *widget, GtkAllocation *allocation,
