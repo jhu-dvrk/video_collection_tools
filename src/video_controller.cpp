@@ -81,12 +81,16 @@ void video_controller::create_ui()
         std::string name = source.get("name", "Unknown").asString();
         std::string stream = source.get("stream", "videotestsrc").asString();
         bool tee_gl_view = source.get("tee_gl_view", false).asBool();
-        
+        int encoding_bitrate = source.get("encoding_bitrate", 10000).asInt();
+        int encoding_speed_preset = source.get("encoding_speed_preset", 2).asInt();
+        int encoding_key_int_max = source.get("encoding_key_int_max", 60).asInt();
+
         std::cout << "Creating pipeline for: " << name << std::endl;
 
-        auto pipe = std::make_unique<video_pipeline>(name, stream, tee_gl_view);
+        auto pipe = std::make_unique<video_pipeline>(name, stream, tee_gl_view,
+            encoding_bitrate, encoding_speed_preset, encoding_key_int_max);
         pipe->set_output_directory(m_data_dir);
-        
+
         if (pipe->build()) {
             GtkWidget* window = pipe->get_window();
             g_signal_connect(window, "destroy", G_CALLBACK(on_window_destroy_cb), this);

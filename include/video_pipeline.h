@@ -25,7 +25,8 @@ struct RecordingMetadata {
 
 class video_pipeline {
 public:
-    video_pipeline(const std::string& name, const std::string& stream_desc, bool tee_gl_view = false);
+    video_pipeline(const std::string& name, const std::string& stream_desc, bool tee_gl_view = false,
+                  int encoding_bitrate = 10000, int encoding_speed_preset = 2, int encoding_key_int_max = 60);
     ~video_pipeline();
 
     bool build(void);
@@ -38,11 +39,13 @@ public:
     GtkWidget* get_window(void) const;
     std::string get_name(void) const { return m_name; } // Getter for pipeline name
 
-private:
     std::string m_name;
     std::string m_stream_desc;
     std::string m_output_directory;
     bool m_tee_gl_view;
+    int m_encoding_bitrate;
+    int m_encoding_speed_preset;
+    int m_encoding_key_int_max;
     GstElement* m_pipeline;
     GstElement* m_tee;
     GstElement* m_recording_bin;

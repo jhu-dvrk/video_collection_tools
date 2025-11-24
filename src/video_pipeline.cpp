@@ -41,10 +41,14 @@ static GstPadProbeReturn eos_cb(GstPad* pad, GstPadProbeInfo* info, gpointer use
     return GST_PAD_PROBE_PASS;
 }
 
-video_pipeline::video_pipeline(const std::string& name, const std::string& stream_desc, bool tee_gl_view)
+video_pipeline::video_pipeline(const std::string& name, const std::string& stream_desc, bool tee_gl_view,
+                  int encoding_bitrate, int encoding_speed_preset, int encoding_key_int_max)
     : m_name(name)
     , m_stream_desc(stream_desc)
     , m_tee_gl_view(tee_gl_view)
+    , m_encoding_bitrate(encoding_bitrate)
+    , m_encoding_speed_preset(encoding_speed_preset)
+    , m_encoding_key_int_max(encoding_key_int_max)
     , m_pipeline(nullptr)
     , m_tee(nullptr)
     , m_recording_bin(nullptr)
@@ -242,10 +246,10 @@ void video_pipeline::start_recording()
     g_object_set(sink, "location", filename.c_str(), nullptr);
     // Tune encoder for higher quality
     g_object_set(enc, 
-                 "bitrate", 10000,           // 10 Mbps bitrate (default is ~2 Mbps)
-                 "speed-preset", 2,          // medium preset (balance quality/speed, default ultrafast=1)
-                 "tune", 0x00000000,         // no special tuning (remove zerolatency)
-                 "key-int-max", 60,          // keyframe every 60 frames (~1 sec at 60fps)
+                 "bitrate", m_encoding_bitrate,
+                 "speed-preset", m_encoding_speed_preset,
+                 "tune", 0x00000000,
+                 "key-int-max", m_encoding_key_int_max,
                  nullptr);
 
     gst_bin_add_many(GST_BIN(m_recording_bin), queue, convert, enc, mux, sink, nullptr);

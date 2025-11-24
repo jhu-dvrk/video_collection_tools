@@ -5,13 +5,19 @@
       "name": "bars",
       "stream": "videotestsrc",
       "record": true,
-      "tee_gl_view": false
+      "tee_gl_view": false,
+      "encoding_bitrate": 10000,
+      "encoding_speed_preset": 2,
+      "encoding_key_int_max": 60
     },
     {
       "name": "ball",
       "stream": "videotestsrc pattern=ball",
       "record": false,
-      "tee_gl_view": true
+      "tee_gl_view": true,
+      "encoding_bitrate": 10000,
+      "encoding_speed_preset": 2,
+      "encoding_key_int_max": 60
     }
   ]
 }
