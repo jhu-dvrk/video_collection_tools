@@ -1,6 +1,6 @@
 <?xml version="1.0"?>
 <package format="3">
-  <name>jhu_data_collection</name>
+  <name>data_collection_tools</name>
   <version>0.1.0</version>
   <description>Video recorder and frame extractor tools for ROS2.</description>
   <maintainer email="anton.deguet@jhu.edu">Anton Deguet</maintainer>

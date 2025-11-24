@@ -1,4 +1,4 @@
-# JHU Data Collection
+# Data Collection Tools
 
 A GStreamer-based multi-stream video player, recorder, and frame extraction toolkit with a GTK3 GUI, written in C++ using CMake.
 
@@ -103,7 +103,7 @@ Example `config.json`:
 3. Build the workspace using colcon:
   ```bash
   cd ~/ros2_ws
-  colcon build --packages-select jhu_data_collection
+  colcon build --packages-select data_collection_tools
   ```
 
 4. Source the workspace:
@@ -130,7 +130,7 @@ Ensure `config.json` is in the current directory (or the build directory if runn
 ### Video Recorder Node
 
 ```bash
-ros2 run jhu_data_collection video_recorder_node -c <path_to_config_file>
+ros2 run data_collection_tools video_recorder_node -c <path_to_config_file>
 ```
 
 ### Frame Extractor
@@ -160,11 +160,11 @@ The following ROS2 Python scripts are provided for controlling the video recorde
 Example usage:
 
 ```bash
-ros2 run jhu_data_collection start_recording.py
-ros2 run jhu_data_collection stop_recording.py
-ros2 run jhu_data_collection set_data_directory.py /path/to/data
-ros2 run jhu_data_collection set_recording.py Camera_1
-ros2 run jhu_data_collection unset_recording.py Camera_1
+ros2 run data_collection_tools start_recording.py
+ros2 run data_collection_tools stop_recording.py
+ros2 run data_collection_tools set_data_directory.py /path/to/data
+ros2 run data_collection_tools set_recording.py Camera_1
+ros2 run data_collection_tools unset_recording.py Camera_1
 ```
 
 ## Output
