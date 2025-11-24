@@ -72,9 +72,12 @@ public:
             m_fps = m_metadata["average_fps"].asDouble();
         }
 
-        // Create output directory
+        // Create output directory next to the video file (relative to video's directory)
         std::filesystem::path video_path(video_file);
-        m_output_dir = video_path.stem().string() + "_frames";
+        std::filesystem::path parent_dir = video_path.parent_path();
+        std::string out_name = video_path.stem().string() + "_frames";
+        std::filesystem::path out_path = parent_dir.empty() ? std::filesystem::path(out_name) : parent_dir / out_name;
+        m_output_dir = out_path.string();
         std::filesystem::create_directories(m_output_dir);
 
         std::cout << "Output directory: " << m_output_dir << std::endl;
