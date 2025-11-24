@@ -1,7 +1,11 @@
+// Author(s): Anton Deguet
+// Copyright 2025 Johns Hopkins University
+
 #pragma once
 
 #include <gst/gst.h>
 #include <string>
+#include <vector>
 #include <memory>
 #include <atomic>
 #include <ctime>
@@ -21,6 +25,7 @@ struct RecordingMetadata {
     struct timespec stop_timespec;
     uint64_t recorded_frames;
     double average_fps;
+    std::vector<std::pair<int64_t, int64_t>> frame_timestamps; // sec, nsec for each encoded frame
 };
 
 class video_pipeline {

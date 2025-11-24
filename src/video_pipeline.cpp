@@ -1,3 +1,6 @@
+// Author(s): Anton Deguet
+// Copyright 2025 Johns Hopkins University
+
 #include "video_pipeline.h"
 
 #include <iostream>
@@ -314,6 +317,11 @@ GstPadProbeReturn video_pipeline::recording_probe_cb(GstPad* pad, GstPadProbeInf
             }
             self->m_metadata.stop_pts = GST_BUFFER_PTS(buffer);
             self->m_metadata.stop_dts = GST_BUFFER_DTS(buffer);
+
+            // Get absolute timestamp for this frame
+            struct timespec now_ts;
+            clock_gettime(CLOCK_REALTIME, &now_ts);
+            self->m_metadata.frame_timestamps.emplace_back(now_ts.tv_sec, now_ts.tv_nsec);
         }
     }
     return GST_PAD_PROBE_OK;
@@ -352,6 +360,16 @@ GstPadProbeReturn video_pipeline::unlink_cb(GstPad* pad, GstPadProbeInfo* info, 
     root["stop_timespec_nsec"] = (Json::Int64)self->m_metadata.stop_timespec.tv_nsec;
     root["recorded_frames"] = (Json::UInt64)self->m_metadata.recorded_frames;
     root["average_fps"] = self->m_metadata.average_fps;
+
+    // Save array of frame timestamps
+    Json::Value timestamps(Json::arrayValue);
+    for (const auto& ts : self->m_metadata.frame_timestamps) {
+        Json::Value entry;
+        entry["sec"] = (Json::Int64)ts.first;
+        entry["nsec"] = (Json::Int64)ts.second;
+        timestamps.append(entry);
+    }
+    root["frame_timestamps"] = timestamps;
 
     std::ofstream file(self->m_metadata.filename + ".json");
     file << root;

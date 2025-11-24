@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
 
+# Author(s): Anton Deguet
+# Copyright 2025 Johns Hopkins University
+
 import rclpy
 from rclpy.node import Node
 from std_msgs.msg import String

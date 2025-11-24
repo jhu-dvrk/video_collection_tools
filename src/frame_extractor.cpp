@@ -1,3 +1,6 @@
+// Author(s): Anton Deguet
+// Copyright 2025 Johns Hopkins University
+
 #include <gst/gst.h>
 #include <gst/app/gstappsink.h>
 #include <json/json.h>
@@ -15,6 +18,8 @@ struct FrameInfo {
     std::string filename;
     std::string timestamp;
     struct timespec timespec_ts;
+    int64_t abs_sec = 0;
+    int64_t abs_nsec = 0;
 };
 
 class FrameExtractor {
@@ -33,18 +38,25 @@ public:
         if (!file.is_open()) {
             throw std::runtime_error("Failed to open JSON file: " + json_file);
         }
-        
         Json::Reader reader;
         if (!reader.parse(file, m_metadata)) {
             throw std::runtime_error("Failed to parse JSON: " + reader.getFormattedErrorMessages());
         }
-        
+
+        // Load frame timestamps
+        if (m_metadata.isMember("frame_timestamps")) {
+            const Json::Value& ts_array = m_metadata["frame_timestamps"];
+            for (const auto& entry : ts_array) {
+                m_frame_timestamps.push_back({entry["sec"].asInt64(), entry["nsec"].asInt64()});
+            }
+        }
+
         // Parse start time
         if (m_metadata.isMember("start_abs_time")) {
             m_start_abs_time = m_metadata["start_abs_time"].asString();
             m_start_time_ms = parse_timestamp(m_start_abs_time);
         }
-        
+
         // Load start_timespec from metadata
         if (m_metadata.isMember("start_timespec_sec") && m_metadata.isMember("start_timespec_nsec")) {
             m_start_timespec.tv_sec = m_metadata["start_timespec_sec"].asInt64();
@@ -54,17 +66,17 @@ public:
             m_start_timespec.tv_sec = m_start_time_ms / 1000;
             m_start_timespec.tv_nsec = (m_start_time_ms % 1000) * 1000000;
         }
-        
+
         // Get FPS
         if (m_metadata.isMember("average_fps")) {
             m_fps = m_metadata["average_fps"].asDouble();
         }
-        
+
         // Create output directory
         std::filesystem::path video_path(video_file);
         m_output_dir = video_path.stem().string() + "_frames";
         std::filesystem::create_directories(m_output_dir);
-        
+
         std::cout << "Output directory: " << m_output_dir << std::endl;
     }
     
@@ -210,27 +222,27 @@ private:
     GstFlowReturn on_new_sample(GstElement* sink) {
         GstSample* sample = nullptr;
         g_signal_emit_by_name(sink, "pull-sample", &sample);
-        
+
         if (!sample) {
             return GST_FLOW_ERROR;
         }
-        
+
         GstBuffer* buffer = gst_sample_get_buffer(sample);
         if (!buffer) {
             gst_sample_unref(sample);
             return GST_FLOW_ERROR;
         }
-        
+
         // Get buffer metadata
         GstClockTime pts = GST_BUFFER_PTS(buffer);
         GstClockTime dts = GST_BUFFER_DTS(buffer);
-        
+
         // Generate filename
         std::stringstream filename;
         filename << "frame_" << std::setfill('0') << std::setw(6) << m_frame_count << ".png";
-        
+
         std::string filepath = m_output_dir + "/" + filename.str();
-        
+
         // Write PNG data to file
         GstMapInfo map;
         if (gst_buffer_map(buffer, &map, GST_MAP_READ)) {
@@ -239,22 +251,28 @@ private:
             out.close();
             gst_buffer_unmap(buffer, &map);
         }
-        
-        // Calculate timestamp for this frame using precise timespec arithmetic
-        double frame_offset_sec = m_frame_count / m_fps;
-        long frame_offset_nsec = static_cast<long>((frame_offset_sec - static_cast<long>(frame_offset_sec)) * 1e9);
-        long frame_offset_sec_int = static_cast<long>(frame_offset_sec);
-        
-        struct timespec frame_ts;
-        frame_ts.tv_sec = m_start_timespec.tv_sec + frame_offset_sec_int;
-        frame_ts.tv_nsec = m_start_timespec.tv_nsec + frame_offset_nsec;
-        
-        // Handle nanosecond overflow
-        if (frame_ts.tv_nsec >= 1000000000) {
-            frame_ts.tv_sec += frame_ts.tv_nsec / 1000000000;
-            frame_ts.tv_nsec = frame_ts.tv_nsec % 1000000000;
+
+        // Use saved absolute timestamp if available
+        struct timespec frame_ts = {0, 0};
+        int64_t abs_sec = 0, abs_nsec = 0;
+        if (m_frame_count < m_frame_timestamps.size()) {
+            abs_sec = m_frame_timestamps[m_frame_count].first;
+            abs_nsec = m_frame_timestamps[m_frame_count].second;
+            frame_ts.tv_sec = abs_sec;
+            frame_ts.tv_nsec = abs_nsec;
+        } else {
+            // Fallback to previous method if not available
+            double frame_offset_sec = m_frame_count / m_fps;
+            long frame_offset_nsec = static_cast<long>((frame_offset_sec - static_cast<long>(frame_offset_sec)) * 1e9);
+            long frame_offset_sec_int = static_cast<long>(frame_offset_sec);
+            frame_ts.tv_sec = m_start_timespec.tv_sec + frame_offset_sec_int;
+            frame_ts.tv_nsec = m_start_timespec.tv_nsec + frame_offset_nsec;
+            if (frame_ts.tv_nsec >= 1000000000) {
+                frame_ts.tv_sec += frame_ts.tv_nsec / 1000000000;
+                frame_ts.tv_nsec = frame_ts.tv_nsec % 1000000000;
+            }
         }
-        
+
         // Store frame info
         FrameInfo info;
         info.frame_number = m_frame_count;
@@ -263,20 +281,21 @@ private:
         info.filename = filename.str();
         info.timespec_ts = frame_ts;
         info.timestamp = format_timestamp_from_timespec(frame_ts);
+        info.abs_sec = abs_sec;
+        info.abs_nsec = abs_nsec;
         m_frames.push_back(info);
-        
+
         m_frame_count++;
-        
- 
+
         if (m_total_frames > 0) {
             double progress = (m_frame_count * 100.0) / m_total_frames;
-            std::cout << "\rProgress: " << std::fixed << std::setprecision(1) 
-                        << progress << "% (" << m_frame_count << "/" << m_total_frames << ")" 
+            std::cout << "\rProgress: " << std::fixed << std::setprecision(1)
+                        << progress << "% (" << m_frame_count << "/" << m_total_frames << ")"
                         << std::flush;
         } else {
             std::cout << "\rExtracted " << m_frame_count << " frames..." << std::flush;
         }
-        
+
         gst_sample_unref(sample);
         return GST_FLOW_OK;
     }
@@ -327,6 +346,7 @@ private:
     uint64_t m_frame_count;
     Json::Value m_metadata;
     std::vector<FrameInfo> m_frames;
+    std::vector<std::pair<int64_t, int64_t>> m_frame_timestamps;
     std::string m_start_abs_time;
     uint64_t m_start_time_ms;
     struct timespec m_start_timespec;

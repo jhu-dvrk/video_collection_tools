@@ -1,5 +1,8 @@
+# Author(s): Anton Deguet
+# Copyright 2025 Johns Hopkins University
+
 cmake_minimum_required(VERSION 3.10)
-project(data_collection_tools)
+project(video_collection_tools)
 
 set(CMAKE_CXX_STANDARD 17)
 
