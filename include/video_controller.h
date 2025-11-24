@@ -2,7 +2,6 @@
 // Copyright 2025 Johns Hopkins University
 
 #pragma once
-
 #include "video_pipeline.h"
 #include <gtk/gtk.h>
 #include <json/json.h>

@@ -5,6 +5,8 @@
 #include "gtk_stream_buf.h"
 #include <iostream>
 #include <string>
+#include <thread>
+#include <chrono>
 
 video_controller::video_controller(const Json::Value &config)
     : m_config(config), m_control_window(nullptr),
@@ -57,7 +59,7 @@ void video_controller::create_ui() {
   gtk_label_set_line_wrap(GTK_LABEL(m_dir_label), TRUE);
   gtk_box_pack_start(GTK_BOX(dir_box), m_dir_label, FALSE, FALSE, 0);
 
-  m_dir_button = gtk_button_new_with_label("Change");
+  m_dir_button = gtk_button_new_with_label("Change directory");
   g_signal_connect(m_dir_button, "clicked",
                    G_CALLBACK(on_dir_button_clicked_cb), this);
   gtk_box_pack_start(GTK_BOX(dir_box), m_dir_button, FALSE, FALSE, 0);
@@ -183,6 +185,42 @@ void video_controller::on_window_destroy() {
   m_open_windows--;
   if (m_open_windows <= 0) {
     m_quitting = true;
+    // Stop any active recordings and wait briefly for them to finish
+    for (auto &pipe : m_pipelines) {
+      if (pipe && pipe->is_recording()) {
+        pipe->stop_recording();
+      }
+    }
+
+    // Wait up to 60 seconds for recordings to finish (log progress)
+    const auto start_wait = std::chrono::steady_clock::now();
+    const auto deadline = start_wait + std::chrono::seconds(60);
+    int last_remaining = -1;
+    std::cout << "Waiting up to 60s for recordings to finish..." << std::endl;
+    while (std::chrono::steady_clock::now() < deadline) {
+      bool any_recording = false;
+      int recording_count = 0;
+      for (auto &pipe : m_pipelines) {
+        if (pipe && pipe->is_recording()) {
+          any_recording = true;
+          ++recording_count;
+        }
+      }
+      if (!any_recording) break;
+
+      auto now = std::chrono::steady_clock::now();
+      int remaining = static_cast<int>(std::chrono::duration_cast<std::chrono::seconds>(deadline - now).count());
+      if (remaining != last_remaining) {
+        std::cout << "Waiting: " << remaining << "s remaining, " << recording_count << " pipeline(s) still recording..." << std::endl;
+        last_remaining = remaining;
+      }
+
+      // Process GTK events so GStreamer and UI can progress
+      while (gtk_events_pending())
+        gtk_main_iteration_do(FALSE);
+      std::this_thread::sleep_for(std::chrono::milliseconds(50));
+    }
+
     m_pipelines.clear();
     gtk_main_quit();
   }
@@ -194,6 +232,41 @@ void video_controller::on_source_check_toggled() { update_recording_state(); }
 
 void video_controller::on_quit_clicked() {
   m_quitting = true;
+  // Stop any active recordings first
+  for (auto &pipe : m_pipelines) {
+    if (pipe && pipe->is_recording()) {
+      pipe->stop_recording();
+    }
+  }
+
+  // Wait up to 60 seconds for recordings to finish (log progress)
+  const auto start_wait = std::chrono::steady_clock::now();
+  const auto deadline = start_wait + std::chrono::seconds(60);
+  int last_remaining = -1;
+  std::cout << "Waiting up to 60s for recordings to finish..." << std::endl;
+  while (std::chrono::steady_clock::now() < deadline) {
+    bool any_recording = false;
+    int recording_count = 0;
+    for (auto &pipe : m_pipelines) {
+      if (pipe && pipe->is_recording()) {
+        any_recording = true;
+        ++recording_count;
+      }
+    }
+    if (!any_recording) break;
+
+    auto now = std::chrono::steady_clock::now();
+    int remaining = static_cast<int>(std::chrono::duration_cast<std::chrono::seconds>(deadline - now).count());
+    if (remaining != last_remaining) {
+      std::cout << "Waiting: " << remaining << "s remaining, " << recording_count << " pipeline(s) still recording..." << std::endl;
+      last_remaining = remaining;
+    }
+
+    while (gtk_events_pending())
+      gtk_main_iteration_do(FALSE);
+    std::this_thread::sleep_for(std::chrono::milliseconds(50));
+  }
+
   m_pipelines.clear();
   gtk_main_quit();
 }

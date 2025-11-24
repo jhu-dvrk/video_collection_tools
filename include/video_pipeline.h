@@ -40,6 +40,7 @@ public:
     void set_output_directory(const std::string& dir);
     void start_recording(void);
     void stop_recording(void);
+    bool is_recording() const { return m_recording_bin != nullptr; }
 
     GtkWidget* get_window(void) const;
     std::string get_name(void) const { return m_name; } // Getter for pipeline name
