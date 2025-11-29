@@ -1,6 +1,6 @@
 {
   "data_directory": "data",
-  "sources": [
+  "pipelines": [
     {
       "name": "bars",
       "stream": "videotestsrc",

@@ -15,6 +15,7 @@ public:
 
   GtkWidget *get_window() const;
   GstElement *get_sink() const;
+  void set_title(const std::string &title);
 
 private:
   std::string m_name;

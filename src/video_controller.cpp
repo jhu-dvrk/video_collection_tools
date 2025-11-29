@@ -3,10 +3,10 @@
 
 #include "video_controller.h"
 #include "gtk_stream_buf.h"
+#include <chrono>
 #include <iostream>
 #include <string>
 #include <thread>
-#include <chrono>
 
 video_controller::video_controller(const Json::Value &config)
     : m_config(config), m_control_window(nullptr),
@@ -75,21 +75,29 @@ void video_controller::create_ui() {
                      gtk_separator_new(GTK_ORIENTATION_HORIZONTAL), FALSE,
                      FALSE, 5);
 
-  const Json::Value &sources = m_config["sources"];
+  const Json::Value &pipelines = m_config["pipelines"];
 
-  for (const auto &source : sources) {
-    std::string name = source.get("name", "Unknown").asString();
-    std::string stream = source.get("stream", "videotestsrc").asString();
-    bool tee_gl_view = source.get("tee_gl_view", false).asBool();
-    int encoding_bitrate = source.get("encoding_bitrate", 10000).asInt();
-    int encoding_speed_preset = source.get("encoding_speed_preset", 2).asInt();
-    int encoding_key_int_max = source.get("encoding_key_int_max", 60).asInt();
+  for (const auto &pipeline : pipelines) {
+    std::string name = pipeline.get("name", "Unknown").asString();
+    std::string source = pipeline.get("source", "videotestsrc").asString();
+    bool tee_gl_view = pipeline.get("tee_gl_view", false).asBool();
+
+    // Read encoding parameters from nested "encoding" object if it exists
+    video_encoding encoding;
+    if (pipeline.isMember("encoding")) {
+      const Json::Value &enc = pipeline["encoding"];
+      encoding.bitrate = enc.get("bitrate", 10000).asInt();
+      encoding.speed_preset = enc.get("speed_preset", 2).asInt();
+      encoding.key_int_max = enc.get("key_int_max", 60).asInt();
+      encoding.frame_rate = enc.get("frame_rate", -1).asInt();
+      encoding.width = enc.get("width", -1).asInt();
+      encoding.height = enc.get("height", -1).asInt();
+    }
 
     std::cout << "Creating pipeline for: " << name << std::endl;
 
-    auto pipe = std::make_unique<video_pipeline>(
-        name, stream, tee_gl_view, encoding_bitrate, encoding_speed_preset,
-        encoding_key_int_max);
+    auto pipe =
+        std::make_unique<video_pipeline>(name, source, tee_gl_view, encoding);
     pipe->set_output_directory(m_data_dir);
 
     if (pipe->build()) {
@@ -110,7 +118,7 @@ void video_controller::create_ui() {
       gtk_box_pack_start(GTK_BOX(row), check, FALSE, FALSE, 0);
 
       // Set default record state for this source
-      if (source.isMember("record") && source["record"].asBool()) {
+      if (pipeline.isMember("record") && pipeline["record"].asBool()) {
         gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(check), TRUE);
       }
 
@@ -206,12 +214,17 @@ void video_controller::on_window_destroy() {
           ++recording_count;
         }
       }
-      if (!any_recording) break;
+      if (!any_recording)
+        break;
 
       auto now = std::chrono::steady_clock::now();
-      int remaining = static_cast<int>(std::chrono::duration_cast<std::chrono::seconds>(deadline - now).count());
+      int remaining = static_cast<int>(
+          std::chrono::duration_cast<std::chrono::seconds>(deadline - now)
+              .count());
       if (remaining != last_remaining) {
-        std::cout << "Waiting: " << remaining << "s remaining, " << recording_count << " pipeline(s) still recording..." << std::endl;
+        std::cout << "Waiting: " << remaining << "s remaining, "
+                  << recording_count << " pipeline(s) still recording..."
+                  << std::endl;
         last_remaining = remaining;
       }
 
@@ -253,12 +266,17 @@ void video_controller::on_quit_clicked() {
         ++recording_count;
       }
     }
-    if (!any_recording) break;
+    if (!any_recording)
+      break;
 
     auto now = std::chrono::steady_clock::now();
-    int remaining = static_cast<int>(std::chrono::duration_cast<std::chrono::seconds>(deadline - now).count());
+    int remaining = static_cast<int>(
+        std::chrono::duration_cast<std::chrono::seconds>(deadline - now)
+            .count());
     if (remaining != last_remaining) {
-      std::cout << "Waiting: " << remaining << "s remaining, " << recording_count << " pipeline(s) still recording..." << std::endl;
+      std::cout << "Waiting: " << remaining << "s remaining, "
+                << recording_count << " pipeline(s) still recording..."
+                << std::endl;
       last_remaining = remaining;
     }
 

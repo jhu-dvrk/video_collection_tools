@@ -18,42 +18,51 @@ video_preview::video_preview(const std::string &name)
   // and set X11 window handle. If gtksink is unavailable, fall back to
   // glimagesink.
   bool prefer_gtksink = false;
-  const char* wayland_env = std::getenv("WAYLAND_DISPLAY");
-  const char* xdg_session = std::getenv("XDG_SESSION_TYPE");
+  const char *wayland_env = std::getenv("WAYLAND_DISPLAY");
+  const char *xdg_session = std::getenv("XDG_SESSION_TYPE");
   if ((wayland_env && wayland_env[0] != '\0') ||
       (xdg_session && std::string(xdg_session) == "wayland")) {
     prefer_gtksink = true;
-    std::cout << "video_preview: Wayland detected via environment; will try gtksink." << std::endl;
+    std::cout
+        << "video_preview: Wayland detected via environment; will try gtksink."
+        << std::endl;
   } else {
-    std::cout << "video_preview: Wayland not detected; will use glimagesink." << std::endl;
+    std::cout << "video_preview: Wayland not detected; will use glimagesink."
+              << std::endl;
   }
 
   if (prefer_gtksink) {
     // Try gtksink first
     m_sink = gst_element_factory_make("gtksink", "sink");
     if (m_sink) {
-      GtkWidget* sink_widget = nullptr;
+      GtkWidget *sink_widget = nullptr;
       g_object_get(G_OBJECT(m_sink), "widget", &sink_widget, NULL);
       if (sink_widget) {
-        std::cout << "video_preview: Using gtksink (embedded widget) for rendering." << std::endl;
+        std::cout
+            << "video_preview: Using gtksink (embedded widget) for rendering."
+            << std::endl;
         m_video_area = sink_widget;
         gtk_container_add(GTK_CONTAINER(m_window), m_video_area);
         gtk_widget_add_events(m_video_area,
                               GDK_BUTTON_PRESS_MASK | GDK_STRUCTURE_MASK);
         g_signal_connect(m_video_area, "button-press-event",
                          G_CALLBACK(on_button_press), this);
-        g_signal_connect(m_video_area, "size-allocate", G_CALLBACK(on_size_allocate),
-                         this);
+        g_signal_connect(m_video_area, "size-allocate",
+                         G_CALLBACK(on_size_allocate), this);
         g_signal_connect(m_video_area, "realize", G_CALLBACK(on_realize), this);
         m_sink_embedded = true;
       } else {
         // gtksink didn't give a widget; fall back
-        std::cout << "video_preview: gtksink created but did not provide widget; falling back to glimagesink." << std::endl;
+        std::cout << "video_preview: gtksink created but did not provide "
+                     "widget; falling back to glimagesink."
+                  << std::endl;
         gst_object_unref(m_sink);
         m_sink = nullptr;
       }
     } else {
-      std::cout << "video_preview: gtksink not available; falling back to glimagesink." << std::endl;
+      std::cout << "video_preview: gtksink not available; falling back to "
+                   "glimagesink."
+                << std::endl;
     }
   }
 
@@ -70,8 +79,8 @@ video_preview::video_preview(const std::string &name)
 
     g_signal_connect(m_video_area, "button-press-event",
                      G_CALLBACK(on_button_press), this);
-    g_signal_connect(m_video_area, "size-allocate", G_CALLBACK(on_size_allocate),
-                     this);
+    g_signal_connect(m_video_area, "size-allocate",
+                     G_CALLBACK(on_size_allocate), this);
     g_signal_connect(m_video_area, "realize", G_CALLBACK(on_realize), this);
 
     m_sink = gst_element_factory_make("glimagesink", "sink");
@@ -96,6 +105,12 @@ GtkWidget *video_preview::get_window() const { return m_window; }
 
 GstElement *video_preview::get_sink() const { return m_sink; }
 
+void video_preview::set_title(const std::string &title) {
+  if (m_window) {
+    gtk_window_set_title(GTK_WINDOW(m_window), title.c_str());
+  }
+}
+
 void video_preview::on_realize(GtkWidget *widget, gpointer data) {
   video_preview *self = static_cast<video_preview *>(data);
   self->handle_realize();
@@ -107,7 +122,7 @@ void video_preview::handle_realize() {
   // (gtksink on Wayland) the sink manages its widget internally.
   if (!m_sink_embedded && m_sink) {
     // Only attempt to get XID on systems using X11 (DISPLAY set).
-    const char* display_env = std::getenv("DISPLAY");
+    const char *display_env = std::getenv("DISPLAY");
     if (display_env && display_env[0] != '\0') {
       GdkWindow *gdk_window = gtk_widget_get_window(m_video_area);
       if (gdk_window) {
