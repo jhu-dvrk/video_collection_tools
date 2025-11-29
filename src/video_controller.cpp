@@ -2,7 +2,6 @@
 // Copyright 2025 Johns Hopkins University
 
 #include "video_controller.h"
-#include "gtk_stream_buf.h"
 #include <chrono>
 #include <iostream>
 #include <string>
@@ -11,12 +10,7 @@
 video_controller::video_controller(const Json::Value &config)
     : m_config(config), m_control_window(nullptr),
       m_main_record_button(nullptr), m_dir_button(nullptr),
-      m_dir_label(nullptr), m_log_view(nullptr), m_open_windows(0),
-      m_quitting(false) {
-  // Redirect cout
-  m_old_cout_buf = std::cout.rdbuf();
-  m_new_cout_buf = std::make_unique<GtkStreamBuf>();
-  std::cout.rdbuf(m_new_cout_buf.get());
+      m_dir_label(nullptr), m_open_windows(0), m_quitting(false) {
 
   if (m_config.isMember("data_directory")) {
     m_data_dir = m_config["data_directory"].asString();
@@ -28,11 +22,6 @@ video_controller::video_controller(const Json::Value &config)
 }
 
 video_controller::~video_controller() {
-  // Restore cout
-  if (m_old_cout_buf) {
-    std::cout.rdbuf(m_old_cout_buf);
-  }
-
   m_quitting = true;
   m_pipelines.clear();
 }
@@ -136,23 +125,6 @@ void video_controller::create_ui() {
   gtk_box_pack_start(GTK_BOX(control_box),
                      gtk_separator_new(GTK_ORIENTATION_HORIZONTAL), FALSE,
                      FALSE, 5);
-
-  // Log Window
-  GtkWidget *scrolled_window = gtk_scrolled_window_new(NULL, NULL);
-  gtk_widget_set_size_request(scrolled_window, -1, 150);
-  gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(scrolled_window),
-                                 GTK_POLICY_AUTOMATIC, GTK_POLICY_AUTOMATIC);
-
-  m_log_view = gtk_text_view_new();
-  gtk_text_view_set_editable(GTK_TEXT_VIEW(m_log_view), FALSE);
-  gtk_text_view_set_wrap_mode(GTK_TEXT_VIEW(m_log_view), GTK_WRAP_WORD);
-  gtk_container_add(GTK_CONTAINER(scrolled_window), m_log_view);
-
-  gtk_box_pack_start(GTK_BOX(control_box), scrolled_window, TRUE, TRUE, 5);
-
-  // Connect log view to stream buffer
-  static_cast<GtkStreamBuf *>(m_new_cout_buf.get())
-      ->set_widgets(GTK_TEXT_VIEW(m_log_view));
 
   // Quit button
   GtkWidget *quit_btn = gtk_button_new_with_label("Quit");

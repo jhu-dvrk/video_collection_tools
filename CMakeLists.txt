@@ -23,7 +23,7 @@ add_library(video_core STATIC
     src/video_preview.cpp
     src/video_pipeline.cpp
     src/video_controller.cpp
-    src/gtk_stream_buf.cpp
+    src/video_controller.cpp
 )
 target_include_directories(video_core PUBLIC
     include

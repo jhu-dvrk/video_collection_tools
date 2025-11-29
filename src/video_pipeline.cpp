@@ -257,144 +257,69 @@ void video_pipeline::start_recording() {
   std::string filename = ss.str();
   m_metadata.filename = filename;
 
-  // Create elements
-  m_recording_bin = gst_bin_new("recording_bin");
-  GstElement *queue = gst_element_factory_make("queue", "rec_queue");
-  // Lock caps to ensure we don't renegotiate upstream
-  GstElement *caps_lock = gst_element_factory_make("capsfilter", "caps_lock");
-  g_object_set(caps_lock, "caps", current_caps, nullptr);
+  // Build pipeline string
+  std::stringstream pipe_str;
+
+  // 1. Queue and caps lock
+  gchar *caps_str = gst_caps_to_string(current_caps);
+  pipe_str << "queue name=rec_queue ! capsfilter caps=\"" << caps_str
+           << "\" ! videoconvert";
+  g_free(caps_str);
   gst_caps_unref(current_caps);
 
-  GstElement *convert = gst_element_factory_make("videoconvert", "rec_convert");
-
-  // Optional elements for frame rate and resolution control
-  GstElement *videorate = nullptr;
-  GstElement *videoscale = nullptr;
-  GstElement *capsfilter = nullptr;
-
-  // Create videorate if frame rate is specified
+  // 2. Optional framerate/scaling
   if (m_encoding.frame_rate > 0) {
-    videorate = gst_element_factory_make("videorate", "rec_videorate");
-    if (!videorate) {
-      std::cerr << "Failed to create videorate element" << std::endl;
-    }
+    pipe_str << " ! videorate skip-to-first=true";
   }
 
-  // Create videoscale and capsfilter if width or height is specified
   if (m_encoding.width > 0 || m_encoding.height > 0 ||
       m_encoding.frame_rate > 0) {
-    videoscale = gst_element_factory_make("videoscale", "rec_videoscale");
-    capsfilter = gst_element_factory_make("capsfilter", "rec_capsfilter");
-
-    if (!videoscale || !capsfilter) {
-      std::cerr << "Failed to create videoscale or capsfilter elements"
-                << std::endl;
-    } else {
-      // Build caps string
-      std::stringstream caps_str;
-      caps_str << "video/x-raw";
-
-      if (m_encoding.width > 0 && m_encoding.height > 0) {
-        caps_str << ",width=" << m_encoding.width
-                 << ",height=" << m_encoding.height;
-      } else if (m_encoding.width > 0) {
-        caps_str << ",width=" << m_encoding.width;
-      } else if (m_encoding.height > 0) {
-        caps_str << ",height=" << m_encoding.height;
-      }
-
-      if (m_encoding.frame_rate > 0) {
-        caps_str << ",framerate=" << m_encoding.frame_rate << "/1";
-      }
-
-      GstCaps *caps = gst_caps_from_string(caps_str.str().c_str());
-      g_object_set(capsfilter, "caps", caps, nullptr);
-      gst_caps_unref(caps);
-
-      std::cout << "Recording with caps: " << caps_str.str() << std::endl;
-    }
+    pipe_str << " ! videoscale ! capsfilter caps=\"video/x-raw";
+    if (m_encoding.width > 0)
+      pipe_str << ",width=" << m_encoding.width;
+    if (m_encoding.height > 0)
+      pipe_str << ",height=" << m_encoding.height;
+    if (m_encoding.frame_rate > 0)
+      pipe_str << ",framerate=" << m_encoding.frame_rate << "/1";
+    pipe_str << "\"";
   }
 
-  GstElement *enc = gst_element_factory_make("x264enc", "rec_enc");
-  GstElement *mux = gst_element_factory_make("mp4mux", "rec_mux");
-  GstElement *sink = gst_element_factory_make("filesink", "rec_sink");
+  // 3. Encoding and sink
+  pipe_str << " ! x264enc bitrate=" << m_encoding.bitrate
+           << " speed-preset=" << m_encoding.speed_preset
+           << " tune=zerolatency key-int-max=" << m_encoding.key_int_max
+           << " ! mp4mux ! filesink location=\"" << filename
+           << "\" name=rec_sink";
 
-  if (!queue || !caps_lock || !convert || !enc || !mux || !sink) {
-    std::cerr << "Failed to create recording elements" << std::endl;
-    return;
-  }
+  std::cout << "Recording pipeline: " << pipe_str.str() << std::endl;
 
-  g_object_set(sink, "location", filename.c_str(), nullptr);
-  // Tune encoder for higher quality
-  g_object_set(enc, "bitrate", m_encoding.bitrate, "speed-preset",
-               m_encoding.speed_preset, "tune", 0x00000000, "key-int-max",
-               m_encoding.key_int_max, nullptr);
+  GError *error = nullptr;
+  m_recording_bin =
+      gst_parse_bin_from_description(pipe_str.str().c_str(), FALSE, &error);
 
-  // Add all elements to the bin
-  gst_bin_add_many(GST_BIN(m_recording_bin), queue, caps_lock, convert,
-                   nullptr);
-
-  if (videorate) {
-    gst_bin_add(GST_BIN(m_recording_bin), videorate);
-  }
-  if (videoscale) {
-    gst_bin_add(GST_BIN(m_recording_bin), videoscale);
-  }
-  if (capsfilter) {
-    gst_bin_add(GST_BIN(m_recording_bin), capsfilter);
-  }
-
-  gst_bin_add_many(GST_BIN(m_recording_bin), enc, mux, sink, nullptr);
-
-  // Link elements in the proper order
-  GstElement *last_element = convert;
-
-  if (!gst_element_link(queue, caps_lock)) {
-    std::cerr << "Failed to link queue to caps_lock" << std::endl;
-    return;
-  }
-
-  if (!gst_element_link(caps_lock, convert)) {
-    std::cerr << "Failed to link caps_lock to convert" << std::endl;
-    return;
-  }
-
-  if (videorate) {
-    if (!gst_element_link(last_element, videorate)) {
-      std::cerr << "Failed to link to videorate" << std::endl;
-      return;
-    }
-    last_element = videorate;
-  }
-
-  if (videoscale) {
-    if (!gst_element_link(last_element, videoscale)) {
-      std::cerr << "Failed to link to videoscale" << std::endl;
-      return;
-    }
-    last_element = videoscale;
-  }
-
-  if (capsfilter) {
-    if (!gst_element_link(last_element, capsfilter)) {
-      std::cerr << "Failed to link to capsfilter" << std::endl;
-      return;
-    }
-    last_element = capsfilter;
-  }
-
-  if (!gst_element_link_many(last_element, enc, mux, sink, nullptr)) {
-    std::cerr << "Failed to link encoder chain" << std::endl;
+  if (!m_recording_bin) {
+    std::cerr << "Failed to create recording bin: "
+              << (error ? error->message : "unknown error") << std::endl;
+    if (error)
+      g_error_free(error);
     return;
   }
 
   // Create ghost pad for the bin to allow linking from outside
+  GstElement *queue =
+      gst_bin_get_by_name(GST_BIN(m_recording_bin), "rec_queue");
+  if (!queue) {
+    std::cerr << "Failed to find rec_queue in recording bin" << std::endl;
+    return;
+  }
+
   GstPad *queue_sink_pad = gst_element_get_static_pad(queue, "sink");
   gst_pad_add_probe(queue_sink_pad, GST_PAD_PROBE_TYPE_BUFFER,
                     recording_probe_cb, this, nullptr);
   GstPad *ghost_pad = gst_ghost_pad_new("sink", queue_sink_pad);
   gst_element_add_pad(m_recording_bin, ghost_pad);
   gst_object_unref(queue_sink_pad);
+  gst_object_unref(queue);
 
   // Add bin to pipeline
   gst_bin_add(GST_BIN(m_pipeline), m_recording_bin);

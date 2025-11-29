@@ -57,7 +57,7 @@ sudo apt-get install libgtk-3-dev libjsoncpp-dev
 
 ## Configuration
 
-The application reads from a `config.json` file in the working directory.
+The application reads from a `config.json` file in the working directory. A JSON schema is provided in `share/video_recorder.schema.json` for validation and IDE support.
 
 Example `config.json`:
 ```json
@@ -88,6 +88,13 @@ Example `config.json`:
   - **`stream`**: GStreamer pipeline description for the video source.
   - **`record`**: Boolean indicating whether this source should be selected for recording by default.
   - **`tee_gl_view`**: Boolean to enable an additional `glimagesink` window for this source (useful for debugging or multi-monitor setups).
+  - **`encoding`**: Optional object to configure video encoding parameters.
+    - **`bitrate`**: Bitrate in bits per second (default: 10000).
+    - **`speed_preset`**: x264 speed preset 1-10 (default: 2).
+    - **`key_int_max`**: Maximum keyframe interval (default: 60).
+    - **`frame_rate`**: Target frame rate (integer).
+    - **`width`**: Target width (integer).
+    - **`height`**: Target height (integer).
 
 
 ## Building (ROS2 / Colcon)
@@ -236,6 +243,8 @@ video-recorder/
 ├── CMakeLists.txt          # Root CMake configuration
 ├── config.json             # Configuration file
 ├── README.md               # This file
+├── share/                  # Shared resources
+│   └── video_recorder.schema.json # JSON schema for config
 ├── include/                # Header files
 │   ├── gtk_stream_buf.h    # GTK stream buffer for log redirection
 │   ├── video_controller.h  # Main controller logic
